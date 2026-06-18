@@ -12,7 +12,7 @@ import requests
 import base64
 
 # --- 1. CONFIGURAÇÃO INICIAL E LOGO ---
-# Corrigido para .png conforme o arquivo do Capítulo
+# Corrigido para .png conforme confirmado por você
 caminho_logo = "Brasão CDS PNG.png"
 tem_logo = os.path.exists(caminho_logo)
 
@@ -27,7 +27,6 @@ st.set_page_config(
     layout="wide"
 )
 
-DB_FILE = "dados_galeto.csv"
 CONFIG_FILE = "config_galeto.json"
 IMG_DIR = "comprovantes"
 
@@ -38,13 +37,30 @@ if "ingresso_edit" not in st.session_state:
     st.session_state.ingresso_edit = None
 
 def selecionar_ingresso(id_ing):
-    # Se clicar no mesmo ingresso, ele fecha a caixinha. Se clicar em outro, ele abre o novo.
     if st.session_state.ingresso_edit == id_ing:
         st.session_state.ingresso_edit = None
     else:
         st.session_state.ingresso_edit = id_ing
 
-# --- 2. CONFIGURAÇÕES E BANCO DE DADOS ---
+# --- 2. CONFIGURAÇÕES, PLANILHA NA NUVEM E IMAGENS ---
+
+# Coloque o link da sua planilha aqui dentro das aspas!
+LINK_PLANILHA = "https://docs.google.com/spreadsheets/d/SEU_LINK_AQUI/edit"
+
+def conectar_google_sheets():
+    scope = ['https://www.googleapis.com/auth/spreadsheets']
+    cred_dict = json.loads(st.secrets["GOOGLE_CREDENTIALS"])
+    credentials = Credentials.from_service_account_info(cred_dict, scopes=scope)
+    gc = gspread.authorize(credentials)
+    return gc.open_by_url(LINK_PLANILHA).sheet1
+
+# Conexão imediata com a planilha master na nuvem
+try:
+    planilha_bd = conectar_google_sheets()
+except Exception as e:
+    st.error(f"Erro ao conectar ao Google Sheets. Verifique os Secrets. Erro: {e}")
+    st.stop()
+
 def carregar_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r") as f:
@@ -57,27 +73,41 @@ def salvar_config(config):
 
 config_app = carregar_config()
 
-def inicializar_dados():
-    if os.path.exists(DB_FILE):
-        df = pd.read_csv(DB_FILE, dtype=str)
-        df.fillna("", inplace=True)
-        # Ordena numericamente garantindo a exibição crescente
-        df['ID_Num'] = pd.to_numeric(df['ID_Ingresso'], errors='coerce')
-        df = df.sort_values('ID_Num').drop(columns=['ID_Num'])
+def ler_dados_nuvem():
+    dados = planilha_bd.get_all_records()
+    if not dados:
+        df = pd.DataFrame(columns=["ID_Ingresso", "Vendedor", "Status", "Observacao", "Comprovante", "Retirado"])
         return df
     
-    df = pd.DataFrame(columns=["ID_Ingresso", "Vendedor", "Status", "Observacao", "Comprovante", "Retirado"])
-    df.to_csv(DB_FILE, index=False)
+    df = pd.DataFrame(dados)
+    df['ID_Num'] = pd.to_numeric(df['ID_Ingresso'], errors='coerce')
+    df = df.sort_values('ID_Num').drop(columns=['ID_Num'])
+    df.fillna("", inplace=True) 
     return df
 
-df_dados = inicializar_dados()
+# Baixa os dados em tempo real da nuvem
+df_dados = ler_dados_nuvem()
 
+def salvar_dados_nuvem(df):
+    planilha_bd.clear()
+    lista_dados = [df.columns.values.tolist()] + df.fillna("").astype(str).values.tolist()
+    planilha_bd.update(values=lista_dados, range_name='A1')
+
+def upload_comprovante_nuvem(arquivo):
+    url = "https://api.imgbb.com/1/upload"
+    payload = {
+        "key": st.secrets["IMGBB_API_KEY"],
+        "image": base64.b64encode(arquivo.getvalue()).decode("utf-8")
+    }
+    res = requests.post(url, data=payload)
+    return res.json()["data"]["url"]
+
+# --- 3. TRATAMENTO DE NOMES E ORDENAÇÃO ---
 lista_base = ["Bernardo", "Caetano", "Gabriel", "Gabriel Medina", "Guilherme", "Guilherme Evangelho", 
               "Gustavinho", "Henrique De Oliveira", "Ícaro", "Iuri", "João", "José Vicente", "Leonel", 
               "Linhares", "Luis Felipe", "Matheus", "Miguel", "Nicolas", "Pedro Terra", "Pietro", 
               "Ramiro", "Teodoro", "Thierry"]
 
-# Função para remover acentos para ordem alfabética correta (Ícaro vai para o I)
 def strip_accents(s):
     return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
 
@@ -101,7 +131,7 @@ def exibir_blocos_ingressos(df_filtrado, prefixo_chave):
                            key=f"{prefixo_chave}_{row['ID_Ingresso']}", 
                            on_click=selecionar_ingresso, args=(row['ID_Ingresso'],))
 
-# --- 3. MENU LATERAL ---
+# --- 4. MENU LATERAL ---
 if tem_logo:
     try:
         st.sidebar.image(Image.open(caminho_logo), use_container_width=True)
@@ -114,7 +144,7 @@ hoje = datetime.now().date()
 data_ev = datetime.strptime(config_app["data_evento"], "%Y-%m-%d").date()
 dias_faltantes = (data_ev - hoje).days
 
-# --- 4. PÁGINA INICIAL ---
+# --- 5. PÁGINA INICIAL ---
 if menu == "🏠 Página Inicial":
     st.title("📊 Dashboard do Evento")
     
@@ -127,13 +157,13 @@ if menu == "🏠 Página Inicial":
     aguardando = len(df_dados[df_dados["Status"] == "Aguardando Pagamento"])
     vendidos_total = pagos + aguardando
     total_estipulado = config_app["total_ingressos"]
-    nao_vendidos = total_estipulado - vendidos_total
+    nao_vendidos = max(total_estipulado - vendidos_total, 0)
     retirados = len(df_dados[df_dados["Retirado"] == "Sim"])
     
-    # Cálculos seguros para progresso
     prog_pagos = min(pagos / total_estipulado, 1.0) if total_estipulado > 0 else 0
     prog_aguardando = min(aguardando / total_estipulado, 1.0) if total_estipulado > 0 else 0
     prog_vendidos = min(vendidos_total / total_estipulado, 1.0) if total_estipulado > 0 else 0
+    prog_nao_vendidos = min(nao_vendidos / total_estipulado, 1.0) if total_estipulado > 0 else 0
     prog_retirados = min(retirados / vendidos_total, 1.0) if vendidos_total > 0 else 0
     
     st.markdown("### 📈 Resumo de Arrecadação")
@@ -150,13 +180,12 @@ if menu == "🏠 Página Inicial":
         st.progress(prog_vendidos)
     with col4:
         st.metric("🔴 Não Vendidos", nao_vendidos)
-        st.progress(min(nao_vendidos / total_estipulado, 1.0) if total_estipulado > 0 else 0)
+        st.progress(prog_nao_vendidos)
     with col5:
         st.metric("🍗 Galetos Retirados", retirados)
         st.progress(prog_retirados)
         
     st.markdown("---")
-    
     col_chart1, col_chart2 = st.columns([1, 2])
     
     with col_chart1:
@@ -192,10 +221,10 @@ if menu == "🏠 Página Inicial":
         
         st.altair_chart(chart, use_container_width=True)
 
-# --- 5. ÁREA DO VENDEDOR ---
+# --- 6. ÁREA DO VENDEDOR ---
 elif menu == "👦 Área do Vendedor":
     st.title("👦 Gestão dos Meus Ingressos")
-    vendedor_sel = st.selectbox("Selecione seu nome:", ["..."] + lista_todos_meninos)
+    vendedor_sel = st.selectbox("Selecione seu nome (Ordem Alfabética):", ["..."] + lista_todos_meninos)
     
     if vendedor_sel != "...":
         df_meus = df_dados[df_dados["Vendedor"] == vendedor_sel]
@@ -206,20 +235,19 @@ elif menu == "👦 Área do Vendedor":
             st.write(f"Você possui **{len(df_meus)}** ingressos atrelados. Clique no bloco para editar:")
             exibir_blocos_ingressos(df_meus, "btn_vend")
             
-            # Caixa de Edição aparecendo embaixo dos ingressos
             if st.session_state.ingresso_edit in df_meus["ID_Ingresso"].values:
                 ing_id = st.session_state.ingresso_edit
-                idx = df_meus[df_meus["ID_Ingresso"] == ing_id].index[0] # Puxa do df_meus pra não errar a pessoa
-                dados_atuais = df_dados.iloc[idx]
+                idx = df_dados[df_dados["ID_Ingresso"] == ing_id].index[0]
+                dados_atuais = df_dados.loc[idx]
                 
                 with st.expander(f"📝 Editando Ingresso {ing_id}", expanded=True):
                     novo_status = st.selectbox("Status de Pagamento:", ["Não Vendido", "Aguardando Pagamento", "Pago"], index=["Não Vendido", "Aguardando Pagamento", "Pago"].index(dados_atuais["Status"]))
                     
-                    tem_obs = bool(dados_atuais["Observacao"].strip())
-                    quer_obs = st.checkbox("Adicionar/Editar Observação", value=tem_obs)
+                    tem_obs = bool(str(dados_atuais["Observacao"]).strip())
+                    quer_obs = st.checkbox("Adicionar/Editar Observação", value=tem_obs, key=f"check_obs_vend_{ing_id}")
                     
                     if quer_obs:
-                        nova_obs = st.text_input("Observação:", value=dados_atuais["Observacao"])
+                        nova_obs = st.text_input("Observação:", value=dados_atuais["Observacao"], key=f"txt_obs_vend_{ing_id}")
                     else:
                         nova_obs = ""
                         
@@ -229,32 +257,32 @@ elif menu == "👦 Área do Vendedor":
                     if col_sv1.button("💾 Salvar", key="save_vend"):
                         df_dados.at[idx, "Status"] = novo_status
                         df_dados.at[idx, "Observacao"] = nova_obs
+                        
                         if comprovante_file is not None:
-                            ext = comprovante_file.name.split(".")[-1]
-                            caminho_completo = os.path.join(IMG_DIR, f"pix_{ing_id}_{datetime.now().strftime('%H%M%S')}.{ext}")
-                            with open(caminho_completo, "wb") as f: f.write(comprovante_file.getbuffer())
-                            df_dados.at[idx, "Comprovante"] = caminho_completo
-                        df_dados.to_csv(DB_FILE, index=False)
-                        st.success("Atualizado!")
+                            link_foto = upload_comprovante_nuvem(comprovante_file)
+                            df_dados.at[idx, "Comprovante"] = link_foto
+                            
+                        salvar_dados_nuvem(df_dados)
+                        st.success("Atualizado na Nuvem com Sucesso!")
                         st.session_state.ingresso_edit = None
                         st.rerun()
                     if col_sv2.button("❌ Cancelar", key="canc_vend"):
                         st.session_state.ingresso_edit = None
                         st.rerun()
 
-# --- 6. TESOURARIA ---
+# --- 7. TESOURARIA ---
 elif menu == "💼 Tesouraria":
     st.title("💼 Painel de Controle da Tesouraria")
     
-    # Painel Dashboard Restabelecido
+    # Painel Dashboard Restabelecido e Idêntico à Home
     pagos = len(df_dados[df_dados["Status"] == "Pago"])
     aguardando = len(df_dados[df_dados["Status"] == "Aguardando Pagamento"])
     vendidos_total = pagos + aguardando
     total_estipulado = config_app["total_ingressos"]
-    nao_vendidos = total_estipulado - vendidos_total
+    nao_vendidos = max(total_estipulado - vendidos_total, 0)
     retirados = len(df_dados[df_dados["Retirado"] == "Sim"])
     
-    st.info(f"**Resumo do Evento:**")
+    st.info(f"**Resumo em Tempo Real:**")
     col_t1, col_t2, col_t3, col_t4, col_t5 = st.columns(5)
     col_t1.metric("🟢 Pagos", pagos)
     col_t2.metric("🟡 Aguardando", aguardando)
@@ -266,24 +294,25 @@ elif menu == "💼 Tesouraria":
     aba_geral, aba_admin = st.tabs(["👁️ Visão Geral e Edição", "➕ Atribuir Ingressos"])
     
     with aba_geral:
+        # Loop estruturado de forma alfabética corrigida
         for vendedor in lista_todos_meninos:
             df_vend = df_dados[df_dados["Vendedor"] == vendedor]
             if not df_vend.empty:
                 st.markdown(f"**👤 {vendedor}** ({len(df_vend)} ingressos)")
                 exibir_blocos_ingressos(df_vend, "btn_tes")
                 
-                # A caixinha de edição abre exatamente abaixo do vendedor correto
+                # Resolução do Bug: Busca o índice absoluto atrelando estritamente o ID do Ingresso
                 if st.session_state.ingresso_edit in df_vend["ID_Ingresso"].values:
                     ing_id = st.session_state.ingresso_edit
-                    idx = df_vend[df_vend["ID_Ingresso"] == ing_id].index[0]
-                    dados_atuais = df_dados.iloc[idx]
+                    idx = df_dados[df_dados["ID_Ingresso"] == ing_id].index[0]
+                    dados_atuais = df_dados.loc[idx]
                     
-                    with st.expander(f"🛠️ Editando Ingresso {ing_id} ({dados_atuais['Vendedor']})", expanded=True):
+                    with st.expander(f"🛠️ Editando Ingresso {ing_id} - Dono: {dados_atuais['Vendedor']}", expanded=True):
                         col_ed1, col_ed2 = st.columns(2)
                         with col_ed1:
-                            novo_status = st.selectbox("Status:", ["Não Vendido", "Aguardando Pagamento", "Pago"], index=["Não Vendido", "Aguardando Pagamento", "Pago"].index(dados_atuais["Status"]))
+                            novo_status = st.selectbox("Status:", ["Não Vendido", "Aguardando Pagamento", "Pago"], index=["Não Vendido", "Aguardando Pagamento", "Pago"].index(dados_atuais["Status"]), key=f"sel_status_tes_{ing_id}")
                             
-                            tem_obs = bool(dados_atuais["Observacao"].strip())
+                            tem_obs = bool(str(dados_atuais["Observacao"]).strip())
                             quer_obs = st.checkbox("Adicionar/Editar Observação", value=tem_obs, key=f"obs_tes_{ing_id}")
                             if quer_obs:
                                 nova_obs = st.text_input("Observação:", value=dados_atuais["Observacao"], key=f"txt_tes_{ing_id}")
@@ -291,28 +320,29 @@ elif menu == "💼 Tesouraria":
                                 nova_obs = ""
                                 
                         with col_ed2:
-                            novo_retirado = st.radio("Galeto Retirado?", ["Não", "Sim"], index=["Não", "Sim"].index(dados_atuais["Retirado"]))
+                            novo_retirado = st.radio("Galeto Retirado?", ["Não", "Sim"], index=["Não", "Sim"].index(dados_atuais["Retirado"]), key=f"rad_ret_tes_{ing_id}")
                             
-                        if dados_atuais["Comprovante"] != "" and os.path.exists(dados_atuais["Comprovante"]):
-                            st.image(Image.open(dados_atuais["Comprovante"]), width=300, caption="Comprovante Enviado")
+                        if dados_atuais["Comprovante"] != "":
+                            st.markdown(f"[🔗 Ver Comprovante em Tela Cheia]({dados_atuais['Comprovante']})")
+                            st.image(dados_atuais["Comprovante"], width=250)
                             
                         col_b1, col_b2 = st.columns([1, 4])
                         if col_b1.button("💾 Salvar", key=f"sv_tes_{ing_id}"):
                             df_dados.at[idx, "Status"] = novo_status
                             df_dados.at[idx, "Observacao"] = nova_obs
                             df_dados.at[idx, "Retirado"] = novo_retirado
-                            df_dados.to_csv(DB_FILE, index=False)
-                            st.success("Salvo!")
+                            salvar_dados_nuvem(df_dados)
+                            st.success("Salvo com sucesso na Planilha!")
                             st.session_state.ingresso_edit = None
                             st.rerun()
                         if col_b2.button("❌ Cancelar", key=f"cc_tes_{ing_id}"):
                             st.session_state.ingresso_edit = None
                             st.rerun()
-                st.write("") # Espaçamento
+                st.write("") 
 
     with aba_admin:
         st.subheader("➕ Atribuir Lote de Ingressos")
-        nome_add = st.selectbox("Selecione o Menino:", lista_todos_meninos)
+        nome_add = st.selectbox("Selecione o Menino:", lista_todos_meninos, key="admin_add_vendedor")
         
         tot_ing = config_app["total_ingressos"]
         mapa_donos = df_dados.set_index('ID_Ingresso')['Vendedor'].to_dict()
@@ -325,9 +355,9 @@ elif menu == "💼 Tesouraria":
             else:
                 opcoes_ingressos.append(num_str)
                 
-        selecionados = st.multiselect("Selecione os números para atribuir (Pode escolher vários):", opcoes_ingressos)
+        selecionados = st.multiselect("Selecione os números para atribuir (Pode escolher vários de uma vez):", opcoes_ingressos)
         
-        if st.button("Atribuir Ingressos"):
+        if st.button("Atribuir Lote Completo"):
             novas_linhas = []
             for s in selecionados:
                 num = s.split(" ")[0]
@@ -340,48 +370,48 @@ elif menu == "💼 Tesouraria":
                     })
             if novas_linhas:
                 df_dados = pd.concat([df_dados, pd.DataFrame(novas_linhas)], ignore_index=True)
-                df_dados.to_csv(DB_FILE, index=False)
-                st.success(f"{len(novas_linhas)} ingressos atribuídos a {nome_add}!")
+                salvar_dados_nuvem(df_dados)
+                st.success(f"Lote de {len(novas_linhas)} ingressos atrelado a {nome_add}!")
                 st.rerun()
 
-# --- 7. CONFIGURAÇÕES ---
+# --- 8. CONFIGURAÇÕES ---
 elif menu == "⚙️ Configurações":
-    st.title("⚙️ Configurações Exclusivas")
+    st.title("⚙️ Configurações Exclusivas da Tesouraria")
     
     st.subheader("Editar Dados da Edição Atual")
     col_cfg1, col_cfg2 = st.columns(2)
     with col_cfg1:
-        novo_total = st.number_input("Número Total de Ingressos:", min_value=1, value=config_app["total_ingressos"])
+        novo_total = st.number_input("Número Total de Ingressos Disponibilizados:", min_value=1, value=config_app["total_ingressos"])
     with col_cfg2:
-        nova_data = st.date_input("Data do Galeto:", value=datetime.strptime(config_app["data_evento"], "%Y-%m-%d").date())
+        nova_data = st.date_input("Data Oficial do Galeto:", value=datetime.strptime(config_app["data_evento"], "%Y-%m-%d").date())
         
-    senha_geral = st.text_input("Senha da Tesouraria:", type="password", key="senha_geral")
+    senha_geral = st.text_input("Digite a Senha da Tesouraria para salvar alterações:", type="password", key="senha_geral")
     
     if st.button("💾 Salvar Configurações"):
         if senha_geral == "2102":
             config_app["total_ingressos"] = novo_total
             config_app["data_evento"] = nova_data.strftime("%Y-%m-%d")
             salvar_config(config_app)
-            st.success("Configurações atualizadas com sucesso!")
+            st.success("Métricas da edição atualizadas com sucesso!")
             st.rerun()
         elif senha_geral != "":
             st.error("Senha incorreta. Acesso negado.")
         else:
-            st.warning("Digite a senha para confirmar as alterações.")
+            st.warning("Por favor, digite a senha para validar a operação.")
         
     st.markdown("---")
-    st.subheader("⚠️ Zona de Perigo")
-    st.warning("Esta ação apagará todos os dados de vendas, ingressos atribuídos e status.")
+    st.subheader("⚠️ Zona de Perigo: Limpar para Próxima Edição")
+    st.warning("Esta ação apagará permanentemente todos os status, observações e vínculos da planilha.")
     
-    senha_delete = st.text_input("Senha da Tesouraria para DELETAR tudo:", type="password", key="senha_delete")
+    senha_delete = st.text_input("Digite a Senha da Tesouraria para RESETAR o sistema:", type="password", key="senha_delete")
     
     if st.button("🗑️ Apagar todos os dados e reiniciar App"):
         if senha_delete == "2102":
             df_zerado = pd.DataFrame(columns=["ID_Ingresso", "Vendedor", "Status", "Observacao", "Comprovante", "Retirado"])
-            df_zerado.to_csv(DB_FILE, index=False)
-            st.success("Sistema reiniciado com sucesso para a nova edição!")
+            salvar_dados_nuvem(df_zerado)
+            st.success("Banco de dados na nuvem resetado com sucesso para a próxima campanha!")
             st.rerun()
         elif senha_delete != "":
-            st.error("Senha incorreta. Acesso negado.")
+            st.error("Senha incorreta. Operação cancelada.")
         else:
-            st.warning("Digite a senha para autorizar a exclusão.")
+            st.warning("A senha é obrigatória para executar o reset do evento.")
