@@ -140,9 +140,14 @@ if tem_logo:
 st.sidebar.title("🍗 Galeto do Capítulo")
 menu = st.sidebar.radio("Navegação", ["🏠 Página Inicial", "👦 Área do Vendedor", "💼 Tesouraria", "⚙️ Configurações"])
 
-hoje = datetime.now().date()
+# --- AJUSTE DE FUSO HORÁRIO PARA O BRASIL ---
+from datetime import timezone, timedelta
+
+fuso_brasil = timezone(timedelta(hours=-3))
+hoje = datetime.now(fuso_brasil).date()
+
 data_ev = datetime.strptime(config_app["data_evento"], "%Y-%m-%d").date()
-dias_faltantes = (data_ev - hoje).days + 1
+dias_faltantes = (data_ev - hoje).days
 
 # --- 5. PÁGINA INICIAL ---
 if menu == "🏠 Página Inicial":
