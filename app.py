@@ -6,6 +6,10 @@ from PIL import Image
 from datetime import datetime
 import altair as alt
 import unicodedata
+import gspread
+from google.oauth2.service_account import Credentials
+import requests
+import base64
 
 # --- 1. CONFIGURAÇÃO INICIAL E LOGO ---
 # Corrigido para .png conforme o arquivo do Capítulo
