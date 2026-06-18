@@ -45,7 +45,7 @@ def selecionar_ingresso(id_ing):
 # --- 2. CONFIGURAÇÕES, PLANILHA NA NUVEM E IMAGENS ---
 
 # Coloque o link da sua planilha aqui dentro das aspas!
-LINK_PLANILHA = "https://docs.google.com/spreadsheets/d/SEU_LINK_AQUI/edit"
+LINK_PLANILHA = "https://docs.google.com/spreadsheets/d/1kpbNVDhO4OGd0rxcsCA71qWqYkZKmS7MwJEnTveCwPA/edit?usp=sharing"
 
 def conectar_google_sheets():
     scope = ['https://www.googleapis.com/auth/spreadsheets']
