@@ -1,3 +1,6 @@
 pandas
 altair
 Pillow
+gspread
+google-auth
+requests
