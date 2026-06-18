@@ -142,7 +142,7 @@ menu = st.sidebar.radio("Navegação", ["🏠 Página Inicial", "👦 Área do V
 
 hoje = datetime.now().date()
 data_ev = datetime.strptime(config_app["data_evento"], "%Y-%m-%d").date()
-dias_faltantes = (data_ev - hoje).days
+dias_faltantes = (data_ev - hoje + 1).days
 
 # --- 5. PÁGINA INICIAL ---
 if menu == "🏠 Página Inicial":
