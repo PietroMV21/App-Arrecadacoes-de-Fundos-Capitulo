@@ -293,163 +293,166 @@ elif menu == "👦 Área do Vendedor":
 elif menu == "💼 Tesouraria":
     st.title("💼 Painel de Controle da Tesouraria")
     
-    pagos = len(df_dados[df_dados["Status"] == "Pago"])
-    aguardando = len(df_dados[df_dados["Status"] == "Aguardando Pagamento"])
-    vendidos_total = pagos + aguardando
-    total_estipulado = config_app["total_ingressos"]
-    nao_vendidos = max(total_estipulado - vendidos_total, 0)
-    retirados = len(df_dados[df_dados["Retirado"] == "Sim"])
+    # Implementação do Bloqueio por Senha na Entrada da Aba
+    senha_acesso_painel = st.text_input("Digite a Senha da Tesouraria para liberar o acesso:", type="password", key="senha_acesso_painel_tes")
     
-    st.info(f"**Resumo em Tempo Real:**")
-    col_t1, col_t2, col_t3, col_t4, col_t5 = st.columns(5)
-    col_t1.metric("🟢 Pagos", pagos)
-    col_t2.metric("🟡 Aguardando", aguardando)
-    col_t3.metric("🔥 Total Vendidos", vendidos_total)
-    col_t4.metric("🔴 Não Vendidos", nao_vendidos)
-    col_t5.metric("🍗 Retirados", retirados)
-    st.markdown("---")
-    
-    aba_geral, aba_admin, aba_membros = st.tabs(["👁️ Visão Geral e Edição", "➕ Atribuir Ingressos", "👥 Gerenciar Meninos"])
-    
-    with aba_geral:
-        # BARRA DE PESQUISA ADICIONADA AQUI
-        busca = st.text_input("🔍 Buscar por Nome do Menino ou Número do Ingresso:").strip()
-        st.write("")
+    if senha_acesso_painel == "2102":
+        pagos = len(df_dados[df_dados["Status"] == "Pago"])
+        aguardando = len(df_dados[df_dados["Status"] == "Aguardando Pagamento"])
+        vendidos_total = pagos + aguardando
+        total_estipulado = config_app["total_ingressos"]
+        nao_vendidos = max(total_estipulado - vendidos_total, 0)
+        retirados = len(df_dados[df_dados["Retirado"] == "Sim"])
         
-        for vendedor in lista_todos_meninos:
-            df_vend = df_dados[df_dados["Vendedor"] == vendedor]
+        st.info(f"**Resumo em Tempo Real:**")
+        col_t1, col_t2, col_t3, col_t4, col_t5 = st.columns(5)
+        col_t1.metric("🟢 Pagos", pagos)
+        col_t2.metric("🟡 Aguardando", aguardando)
+        col_t3.metric("🔥 Total Vendidos", vendidos_total)
+        col_t4.metric("🔴 Não Vendidos", nao_vendidos)
+        col_t5.metric("🍗 Retirados", retirados)
+        st.markdown("---")
+        
+        aba_geral, aba_admin, aba_membros = st.tabs(["👁️ Visão Geral e Edição", "➕ Atribuir Ingressos", "👥 Gerenciar Meninos"])
+        
+        with aba_geral:
+            busca = st.text_input("🔍 Buscar por Nome do Menino ou Número do Ingresso:").strip()
+            st.write("")
             
-            if not df_vend.empty:
-                # Verificadores de busca ignorando maiúsculas e acentos
-                nome_busca_limpo = strip_accents(busca.lower())
-                nome_vendedor_limpo = strip_accents(vendedor.lower())
+            for vendedor in lista_todos_meninos:
+                df_vend = df_dados[df_dados["Vendedor"] == vendedor]
                 
-                match_vendedor = nome_busca_limpo in nome_vendedor_limpo
-                match_ingresso = any(busca in str(ing) for ing in df_vend["ID_Ingresso"].values)
-                
-                if busca == "" or match_vendedor or match_ingresso:
+                if not df_vend.empty:
+                    nome_busca_limpo = strip_accents(busca.lower())
+                    nome_vendedor_limpo = strip_accents(vendedor.lower())
                     
-                    # Se pesquisou por um número de ingresso, filtra apenas ele para facilitar a edição visual
-                    df_exibir = df_vend
-                    if busca != "" and not match_vendedor and match_ingresso:
-                        df_exibir = df_vend[df_vend["ID_Ingresso"].astype(str).str.contains(busca, case=False)]
+                    match_vendedor = nome_busca_limpo in nome_vendedor_limpo
+                    match_ingresso = any(busca in str(ing) for ing in df_vend["ID_Ingresso"].values)
                     
-                    # Título dinâmico de acordo com os ingressos renderizados
-                    st.markdown(f"**👤 {vendedor}** ({len(df_vend)} ingressos)")
-                    exibir_blocos_ingressos(df_exibir, "btn_tes")
-                    
-                    if st.session_state.ingresso_edit in df_exibir["ID_Ingresso"].values:
-                        ing_id = st.session_state.ingresso_edit
-                        idx = df_dados[df_dados["ID_Ingresso"] == ing_id].index[0]
-                        dados_atuais = df_dados.loc[idx]
+                    if busca == "" or match_vendedor or match_ingresso:
+                        df_exibir = df_vend
+                        if busca != "" and not match_vendedor and match_ingresso:
+                            df_exibir = df_vend[df_vend["ID_Ingresso"].astype(str).str.contains(busca, case=False)]
                         
-                        with st.expander(f"🛠️ Editando Ingresso {ing_id} - Dono: {dados_atuais['Vendedor']}", expanded=True):
-                            col_ed1, col_ed2 = st.columns(2)
-                            with col_ed1:
-                                novo_status = st.selectbox("Status:", ["Não Vendido", "Aguardando Pagamento", "Pago"], index=["Não Vendido", "Aguardando Pagamento", "Pago"].index(dados_atuais["Status"]), key=f"sel_status_tes_{ing_id}")
-                                
-                                tem_obs = bool(str(dados_atuais["Observacao"]).strip())
-                                quer_obs = st.checkbox("Adicionar/Editar Observação", value=tem_obs, key=f"obs_tes_{ing_id}")
-                                if quer_obs:
-                                    nova_obs = st.text_input("Observação:", value=dados_atuais["Observacao"], key=f"txt_tes_{ing_id}")
-                                else:
-                                    nova_obs = ""
+                        st.markdown(f"**👤 {vendedor}** ({len(df_vend)} ingressos)")
+                        exibir_blocos_ingressos(df_exibir, "btn_tes")
+                        
+                        if st.session_state.ingresso_edit in df_exibir["ID_Ingresso"].values:
+                            ing_id = st.session_state.ingresso_edit
+                            idx = df_dados[df_dados["ID_Ingresso"] == ing_id].index[0]
+                            dados_atuais = df_dados.loc[idx]
+                            
+                            with st.expander(f"🛠️ Editando Ingresso {ing_id} - Dono: {dados_atuais['Vendedor']}", expanded=True):
+                                col_ed1, col_ed2 = st.columns(2)
+                                with col_ed1:
+                                    novo_status = st.selectbox("Status:", ["Não Vendido", "Aguardando Pagamento", "Pago"], index=["Não Vendido", "Aguardando Pagamento", "Pago"].index(dados_atuais["Status"]), key=f"sel_status_tes_{ing_id}")
                                     
-                            with col_ed2:
-                                novo_retirado = st.radio("Galeto Retirado?", ["Não", "Sim"], index=["Não", "Sim"].index(dados_atuais["Retirado"]), key=f"rad_ret_tes_{ing_id}")
-                                
-                            if dados_atuais["Comprovante"] != "":
-                                st.markdown(f"[🔗 Ver Comprovante em Tela Cheia]({dados_atuais['Comprovante']})")
-                                st.image(dados_atuais["Comprovante"], width=250)
-                                
-                            col_b1, col_b2 = st.columns([1, 4])
-                            if col_b1.button("💾 Salvar", key=f"sv_tes_{ing_id}"):
-                                df_dados.at[idx, "Status"] = novo_status
-                                df_dados.at[idx, "Observacao"] = nova_obs
-                                df_dados.at[idx, "Retirado"] = novo_retirado
-                                salvar_dados_nuvem(df_dados)
-                                st.success("Salvo com sucesso na Planilha!")
-                                st.session_state.ingresso_edit = None
-                                st.rerun()
-                            if col_b2.button("❌ Cancelar", key=f"cc_tes_{ing_id}"):
-                                st.session_state.ingresso_edit = None
-                                st.rerun()
-                    st.write("") 
+                                    tem_obs = bool(str(dados_atuais["Observacao"]).strip())
+                                    quer_obs = st.checkbox("Adicionar/Editar Observação", value=tem_obs, key=f"obs_tes_{ing_id}")
+                                    if quer_obs:
+                                        nova_obs = st.text_input("Observação:", value=dados_atuais["Observacao"], key=f"txt_tes_{ing_id}")
+                                    else:
+                                        nova_obs = ""
+                                        
+                                with col_ed2:
+                                    novo_retirado = st.radio("Galeto Retirado?", ["Não", "Sim"], index=["Não", "Sim"].index(dados_atuais["Retirado"]), key=f"rad_ret_tes_{ing_id}")
+                                    
+                                if dados_atuais["Comprovante"] != "":
+                                    st.markdown(f"[🔗 Ver Comprovante em Tela Cheia]({dados_atuais['Comprovante']})")
+                                    st.image(dados_atuais["Comprovante"], width=250)
+                                    
+                                col_b1, col_b2 = st.columns([1, 4])
+                                if col_b1.button("💾 Salvar", key=f"sv_tes_{ing_id}"):
+                                    df_dados.at[idx, "Status"] = novo_status
+                                    df_dados.at[idx, "Observacao"] = nova_obs
+                                    df_dados.at[idx, "Retirado"] = novo_retirado
+                                    salvar_dados_nuvem(df_dados)
+                                    st.success("Salvo com sucesso na Planilha!")
+                                    st.session_state.ingresso_edit = None
+                                    st.rerun()
+                                if col_b2.button("❌ Cancelar", key=f"cc_tes_{ing_id}"):
+                                    st.session_state.ingresso_edit = None
+                                    st.rerun()
+                        st.write("") 
 
-    with aba_admin:
-        st.subheader("➕ Atribuir Lote de Ingressos")
-        nome_add = st.selectbox("Selecione o Menino:", lista_todos_meninos, key="admin_add_vendedor")
-        
-        tot_ing = config_app["total_ingressos"]
-        mapa_donos = df_dados.set_index('ID_Ingresso')['Vendedor'].to_dict()
-        opcoes_ingressos = []
-        
-        for i in range(1, tot_ing + 1):
-            num_str = str(i).zfill(3)
-            if num_str in mapa_donos:
-                opcoes_ingressos.append(f"{num_str} (Atribuído a {mapa_donos[num_str]})")
-            else:
-                opcoes_ingressos.append(num_str)
-                
-        selecionados = st.multiselect("Selecione os números para atribuir (Pode escolher vários de uma vez):", opcoes_ingressos)
-        
-        if st.button("Atribuir Lote Completo"):
-            novas_linhas = []
-            for s in selecionados:
-                num = s.split(" ")[0]
-                if "(Atribuído" in s:
-                    st.error(f"Erro: O ingresso {num} já tem dono!")
+        with aba_admin:
+            st.subheader("➕ Atribuir Lote de Ingressos")
+            nome_add = st.selectbox("Selecione o Menino:", lista_todos_meninos, key="admin_add_vendedor")
+            
+            tot_ing = config_app["total_ingressos"]
+            mapa_donos = df_dados.set_index('ID_Ingresso')['Vendedor'].to_dict()
+            opcoes_ingressos = []
+            
+            for i in range(1, tot_ing + 1):
+                num_str = str(i).zfill(3)
+                if num_str in mapa_donos:
+                    opcoes_ingressos.append(f"{num_str} (Atribuído a {mapa_donos[num_str]})")
                 else:
-                    novas_linhas.append({
-                        "ID_Ingresso": num, "Vendedor": nome_add,
-                        "Status": "Não Vendido", "Observacao": "", "Comprovante": "", "Retirado": "Não"
-                    })
-            if novas_linhas:
-                df_dados = pd.concat([df_dados, pd.DataFrame(novas_linhas)], ignore_index=True)
-                salvar_dados_nuvem(df_dados)
-                st.success(f"Lote de {len(novas_linhas)} ingressos atrelado a {nome_add}!")
-                st.rerun()
-                
-    with aba_membros:
-        st.subheader("👥 Gerenciar Lista de Meninos")
-        st.write("Adicione novos membros para que apareçam nas opções ou retire nomes daqueles que não estão mais vendendo.")
-        
-        col_add, col_rem = st.columns(2)
-        
-        with col_add:
-            st.markdown("**➕ Adicionar Nome à Lista**")
-            novo_nome = st.text_input("Digite o nome do novo menino:")
-            if st.button("Adicionar Nome"):
-                if novo_nome:
-                    extras = config_app.get("vendedores_extras", [])
-                    ocultos = config_app.get("vendedores_ocultos", [])
+                    opcoes_ingressos.append(num_str)
                     
-                    if novo_nome in ocultos:
-                        ocultos.remove(novo_nome)
-                        config_app["vendedores_ocultos"] = ocultos
-                    elif novo_nome not in extras and novo_nome not in lista_base:
-                        extras.append(novo_nome)
-                        config_app["vendedores_extras"] = extras
-                        
-                    salvar_config(config_app)
-                    st.success(f"'{novo_nome}' adicionado com sucesso!")
+            selecionados = st.multiselect("Selecione os números para atribuir (Pode escolher vários de uma vez):", opcoes_ingressos)
+            
+            if st.button("Atribuir Lote Completo"):
+                novas_linhas = []
+                for s in selecionados:
+                    num = s.split(" ")[0]
+                    if "(Atribuído" in s:
+                        st.error(f"Erro: O ingresso {num} já tem dono!")
+                    else:
+                        novas_linhas.append({
+                            "ID_Ingresso": num, "Vendedor": nome_add,
+                            "Status": "Não Vendido", "Observacao": "", "Comprovante": "", "Retirado": "Não"
+                        })
+                if novas_linhas:
+                    df_dados = pd.concat([df_dados, pd.DataFrame(novas_linhas)], ignore_index=True)
+                    salvar_dados_nuvem(df_dados)
+                    st.success(f"Lote de {len(novas_linhas)} ingressos atrelado a {nome_add}!")
                     st.rerun()
                     
-        with col_rem:
-            st.markdown("**🗑️ Retirar Nome da Lista**")
-            nome_remover = st.selectbox("Selecione o nome para retirar:", ["..."] + lista_todos_meninos)
-            if st.button("Retirar Nome"):
-                if nome_remover != "...":
-                    if nome_remover in df_dados["Vendedor"].values:
-                        st.error(f"Não é possível retirar '{nome_remover}' pois ele ainda possui ingressos atrelados. Remova ou transfira os ingressos dele primeiro.")
-                    else:
+        with aba_membros:
+            st.subheader("👥 Gerenciar Lista de Meninos")
+            st.write("Adicione novos membros para que apareçam nas opções ou retire nomes daqueles que não estão mais vendendo.")
+            
+            col_add, col_rem = st.columns(2)
+            
+            with col_add:
+                st.markdown("**➕ Adicionar Nome à Lista**")
+                novo_nome = st.text_input("Digite o nome do novo menino:")
+                if st.button("Adicionar Nome"):
+                    if novo_nome:
+                        extras = config_app.get("vendedores_extras", [])
                         ocultos = config_app.get("vendedores_ocultos", [])
-                        if nome_remover not in ocultos:
-                            ocultos.append(nome_remover)
+                        
+                        if novo_nome in ocultos:
+                            ocultos.remove(novo_nome)
                             config_app["vendedores_ocultos"] = ocultos
-                            salvar_config(config_app)
-                            st.success(f"'{nome_remover}' retirado da lista com sucesso!")
-                            st.rerun()
+                        elif novo_nome not in extras and novo_nome not in lista_base:
+                            extras.append(novo_nome)
+                            config_app["vendedores_extras"] = extras
+                            
+                        salvar_config(config_app)
+                        st.success(f"'{novo_nome}' adicionado com sucesso!")
+                        st.rerun()
+                        
+            with col_rem:
+                st.markdown("**🗑️ Retirar Nome da Lista**")
+                nome_remover = st.selectbox("Selecione o nome para retirar:", ["..."] + lista_todos_meninos)
+                if st.button("Retirar Nome"):
+                    if nome_remover != "...":
+                        if nome_remover in df_dados["Vendedor"].values:
+                            st.error(f"Não é possível retirar '{nome_remover}' pois ele ainda possui ingressos atrelados. Remova ou transfira os ingressos dele primeiro.")
+                        else:
+                            ocultos = config_app.get("vendedores_ocultos", [])
+                            if nome_remover not in ocultos:
+                                ocultos.append(nome_remover)
+                                config_app["vendedores_ocultos"] = ocultos
+                                salvar_config(config_app)
+                                st.success(f"'{nome_remover}' retirado da lista com sucesso!")
+                                st.rerun()
+    elif senha_acesso_painel != "":
+        st.error("Senha incorreta. Acesso negado.")
+    else:
+        st.warning("Esta área é restrita aos tesoureiros. Por favor, digite a senha para visualizar os dados.")
 
 # --- 8. CONFIGURAÇÕES ---
 elif menu == "⚙️ Configurações":
@@ -469,7 +472,7 @@ elif menu == "⚙️ Configurações":
             config_app["total_ingressos"] = novo_total
             config_app["data_evento"] = nova_data.strftime("%Y-%m-%d")
             salvar_config(config_app)
-            st.success("Métricas da edição atualizadas com sucesso!")
+            st.success("Métricas da edição updated com sucesso!")
             st.rerun()
         elif senha_geral != "":
             st.error("Senha incorreta. Acesso negado.")
