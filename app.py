@@ -10,6 +10,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 import requests
 import base64
+import time
 
 # --- 1. CONFIGURAÇÃO INICIAL E LOGO ---
 caminho_logo = "Brasão CDS PNG.png"
@@ -121,7 +122,7 @@ todos_iniciais = set(df_dados["Vendedor"].unique()) | set(lista_base) | set(conf
 
 ocultos = set(config_app.get("vendedores_ocultos", []))
 ativos_com_ingresso = set(df_dados["Vendedor"].unique())
-ocultos_validos = ocultos - ativos_com_ingresso 
+ocultos_validos = ocultos - actives if (actives := actives_com_ingresso) else ocultos
 
 lista_todos_meninos = sorted(list(todos_iniciais - ocultos_validos), key=strip_accents)
 
@@ -160,7 +161,7 @@ hoje = datetime.now(fuso_brasil).date()
 data_ev = datetime.strptime(config_app["data_evento"], "%Y-%m-%d").date()
 dias_faltantes = (data_ev - hoje).days
 
-# --- 5. PÁGINA INICIAL ---
+# --- 5. PÁGINA INICIAL (COM AUTO-REFRESH) ---
 if menu == "🏠 Página Inicial":
     st.title("📊 Dashboard do Evento")
     
@@ -236,6 +237,14 @@ if menu == "🏠 Página Inicial":
         ).properties(height=350)
         
         st.altair_chart(chart, use_container_width=True)
+
+    # --- ENGENHARIA DE ATUALIZAÇÃO AUTOMÁTICA (EXECUTA EM BACKGROUND) ---
+    @st.fragment
+    def disparar_timer_atualizacao():
+        time.sleep(30)
+        st.rerun()
+        
+    disparar_timer_atualizacao()
 
 # --- 6. ÁREA DO VENDEDOR ---
 elif menu == "👦 Área do Vendedor":
@@ -402,7 +411,6 @@ elif menu == "💼 Tesouraria":
                 if novas_linhas:
                     df_dados = pd.concat([df_dados, pd.DataFrame(novas_linhas)], ignore_index=True)
                     
-                    # CONSERTO: Ordena e limpa de imediato as duplicatas ao atribuir novos lotes
                     df_dados['ID_Num'] = pd.to_numeric(df_dados['ID_Ingresso'], errors='coerce')
                     df_dados = df_dados.sort_values('ID_Num').drop_duplicates(subset=['ID_Ingresso'], keep='last').drop(columns=['ID_Num']).reset_index(drop=True)
                     
