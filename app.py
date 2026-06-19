@@ -84,7 +84,6 @@ def ler_dados_nuvem():
     
     df = pd.DataFrame(dados)
     
-    # CONSERTO: Força numeração padronizada (001, 002...), remove lixo e elimina duplicatas de imediato.
     df['ID_Num'] = pd.to_numeric(df['ID_Ingresso'], errors='coerce')
     df = df.dropna(subset=['ID_Num'])
     df['ID_Ingresso'] = df['ID_Num'].astype(int).astype(str).str.zfill(3)
@@ -122,7 +121,7 @@ todos_iniciais = set(df_dados["Vendedor"].unique()) | set(lista_base) | set(conf
 
 ocultos = set(config_app.get("vendedores_ocultos", []))
 ativos_com_ingresso = set(df_dados["Vendedor"].unique())
-ocultos_validos = ocultos - actives if (actives := actives_com_ingresso) else ocultos
+ocultos_validos = ocultos - ativos_com_ingresso 
 
 lista_todos_meninos = sorted(list(todos_iniciais - ocultos_validos), key=strip_accents)
 
