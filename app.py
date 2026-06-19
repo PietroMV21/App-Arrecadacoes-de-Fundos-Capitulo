@@ -133,16 +133,17 @@ def get_cor_status(status):
     if status == "Pago": return "🟢"
     return "⚪"
 
+# CORREÇÃO DO ERRO: Adicionado o índice da linha (idx) para garantir chaves únicas globais
 def exibir_blocos_ingressos(df_filtrado, prefixo_chave):
     n_cols = 10
     for i in range(0, len(df_filtrado), n_cols):
         cols = st.columns(n_cols)
         lote = df_filtrado.iloc[i:i+n_cols]
-        for j, (_, row) in enumerate(lote.iterrows()):
+        for j, (idx, row) in enumerate(lote.iterrows()):
             icone = get_cor_status(row['Status'])
             retirado_mark = " ✔️" if row['Retirado'] == "Sim" else ""
             cols[j].button(f"{icone} {row['ID_Ingresso']}{retirado_mark}", 
-                           key=f"{prefixo_chave}_{row['ID_Ingresso']}", 
+                           key=f"{prefixo_chave}_{row['ID_Ingresso']}_{idx}", 
                            on_click=selecionar_ingresso, args=(row['ID_Ingresso'],))
 
 # --- 4. MENU LATERAL ---
@@ -263,17 +264,17 @@ elif menu == "👦 Área do Vendedor":
                     novo_status = st.selectbox("Status de Pagamento:", ["Não Vendido", "Aguardando Pagamento", "Pago"], index=["Não Vendido", "Aguardando Pagamento", "Pago"].index(dados_atuais["Status"]))
                     
                     tem_obs = bool(str(dados_atuais["Observacao"]).strip())
-                    quer_obs = st.checkbox("Adicionar/Editar Observação", value=tem_obs, key=f"check_obs_vend_{ing_id}")
+                    quer_obs = st.checkbox("Adicionar/Editar Observação", value=tem_obs, key=f"check_obs_vend_{ing_id}_{idx}")
                     
                     if quer_obs:
-                        nova_obs = st.text_input("Observação:", value=dados_atuais["Observacao"], key=f"txt_obs_vend_{ing_id}")
+                        nova_obs = st.text_input("Observação:", value=dados_atuais["Observacao"], key=f"txt_obs_vend_{ing_id}_{idx}")
                     else:
                         nova_obs = ""
                         
                     comprovante_file = st.file_uploader("🧾 Anexar Comprovante PIX", type=["png", "jpg", "jpeg"])
                     
                     col_sv1, col_sv2 = st.columns([1, 4])
-                    if col_sv1.button("💾 Salvar", key="save_vend"):
+                    if col_sv1.button("💾 Salvar", key=f"save_vend_{idx}"):
                         df_dados.at[idx, "Status"] = novo_status
                         df_dados.at[idx, "Observacao"] = nova_obs
                         
@@ -285,7 +286,7 @@ elif menu == "👦 Área do Vendedor":
                         st.success("Atualizado na Nuvem com Sucesso!")
                         st.session_state.ingresso_edit = None
                         st.rerun()
-                    if col_sv2.button("❌ Cancelar", key="canc_vend"):
+                    if col_sv2.button("❌ Cancelar", key=f"canc_vend_{idx}"):
                         st.session_state.ingresso_edit = None
                         st.rerun()
 
@@ -316,6 +317,7 @@ elif menu == "💼 Tesouraria":
         aba_geral, aba_admin, aba_membros = st.tabs(["👁️ Visão Geral e Edição", "➕ Atribuir Ingressos", "👥 Gerenciar Meninos"])
         
         with aba_geral:
+            # BARRA DE PESQUISA ADICIONADA AQUI
             busca = st.text_input("🔍 Buscar por Nome do Menino ou Número do Ingresso:").strip()
             st.write("")
             
@@ -339,30 +341,30 @@ elif menu == "💼 Tesouraria":
                         
                         if st.session_state.ingresso_edit in df_exibir["ID_Ingresso"].values:
                             ing_id = st.session_state.ingresso_edit
-                            idx = df_dados[df_dados["ID_Ingresso"] == ing_id].index[0]
+                            idx = df_exibir[df_exibir["ID_Ingresso"] == ing_id].index[0]
                             dados_atuais = df_dados.loc[idx]
                             
                             with st.expander(f"🛠️ Editando Ingresso {ing_id} - Dono: {dados_atuais['Vendedor']}", expanded=True):
                                 col_ed1, col_ed2 = st.columns(2)
                                 with col_ed1:
-                                    novo_status = st.selectbox("Status:", ["Não Vendido", "Aguardando Pagamento", "Pago"], index=["Não Vendido", "Aguardando Pagamento", "Pago"].index(dados_atuais["Status"]), key=f"sel_status_tes_{ing_id}")
+                                    novo_status = st.selectbox("Status:", ["Não Vendido", "Aguardando Pagamento", "Pago"], index=["Não Vendido", "Aguardando Pagamento", "Pago"].index(dados_atuais["Status"]), key=f"sel_status_tes_{ing_id}_{idx}")
                                     
                                     tem_obs = bool(str(dados_atuais["Observacao"]).strip())
-                                    quer_obs = st.checkbox("Adicionar/Editar Observação", value=tem_obs, key=f"obs_tes_{ing_id}")
+                                    quer_obs = st.checkbox("Adicionar/Editar Observação", value=tem_obs, key=f"obs_tes_{ing_id}_{idx}")
                                     if quer_obs:
-                                        nova_obs = st.text_input("Observação:", value=dados_atuais["Observacao"], key=f"txt_tes_{ing_id}")
+                                        nova_obs = st.text_input("Observação:", value=dados_atuais["Observacao"], key=f"txt_tes_{ing_id}_{idx}")
                                     else:
                                         nova_obs = ""
                                         
                                 with col_ed2:
-                                    novo_retirado = st.radio("Galeto Retirado?", ["Não", "Sim"], index=["Não", "Sim"].index(dados_atuais["Retirado"]), key=f"rad_ret_tes_{ing_id}")
+                                    novo_retirado = st.radio("Galeto Retirado?", ["Não", "Sim"], index=["Não", "Sim"].index(dados_atuais["Retirado"]), key=f"rad_ret_tes_{ing_id}_{idx}")
                                     
                                 if dados_atuais["Comprovante"] != "":
                                     st.markdown(f"[🔗 Ver Comprovante em Tela Cheia]({dados_atuais['Comprovante']})")
                                     st.image(dados_atuais["Comprovante"], width=250)
                                     
                                 col_b1, col_b2 = st.columns([1, 4])
-                                if col_b1.button("💾 Salvar", key=f"sv_tes_{ing_id}"):
+                                if col_b1.button("💾 Salvar", key=f"sv_tes_{ing_id}_{idx}"):
                                     df_dados.at[idx, "Status"] = novo_status
                                     df_dados.at[idx, "Observacao"] = nova_obs
                                     df_dados.at[idx, "Retirado"] = novo_retirado
@@ -370,7 +372,7 @@ elif menu == "💼 Tesouraria":
                                     st.success("Salvo com sucesso na Planilha!")
                                     st.session_state.ingresso_edit = None
                                     st.rerun()
-                                if col_b2.button("❌ Cancelar", key=f"cc_tes_{ing_id}"):
+                                if col_b2.button("❌ Cancelar", key=f"cc_tes_{ing_id}_{idx}"):
                                     st.session_state.ingresso_edit = None
                                     st.rerun()
                         st.write("") 
@@ -409,7 +411,7 @@ elif menu == "💼 Tesouraria":
                     st.success(f"Lote de {len(novas_linhas)} ingressos atrelado a {nome_add}!")
                     st.rerun()
                     
-        with aba_membros:
+        with col_add := aba_membros:
             st.subheader("👥 Gerenciar Lista de Meninos")
             st.write("Adicione novos membros para que apareçam nas opções ou retire nomes daqueles que não estão mais vendendo.")
             
