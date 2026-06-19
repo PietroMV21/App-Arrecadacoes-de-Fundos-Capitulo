@@ -82,8 +82,13 @@ def ler_dados_nuvem():
         return df
     
     df = pd.DataFrame(dados)
+    
+    # CONSERTO: Força numeração padronizada (001, 002...), remove lixo e elimina duplicatas de imediato.
     df['ID_Num'] = pd.to_numeric(df['ID_Ingresso'], errors='coerce')
-    df = df.sort_values('ID_Num').drop(columns=['ID_Num'])
+    df = df.dropna(subset=['ID_Num'])
+    df['ID_Ingresso'] = df['ID_Num'].astype(int).astype(str).str.zfill(3)
+    df = df.sort_values('ID_Num').drop_duplicates(subset=['ID_Ingresso'], keep='last').drop(columns=['ID_Num']).reset_index(drop=True)
+    
     df.fillna("", inplace=True) 
     return df
 
@@ -396,6 +401,11 @@ elif menu == "💼 Tesouraria":
                         })
                 if novas_linhas:
                     df_dados = pd.concat([df_dados, pd.DataFrame(novas_linhas)], ignore_index=True)
+                    
+                    # CONSERTO: Ordena e limpa de imediato as duplicatas ao atribuir novos lotes
+                    df_dados['ID_Num'] = pd.to_numeric(df_dados['ID_Ingresso'], errors='coerce')
+                    df_dados = df_dados.sort_values('ID_Num').drop_duplicates(subset=['ID_Ingresso'], keep='last').drop(columns=['ID_Num']).reset_index(drop=True)
+                    
                     salvar_dados_nuvem(df_dados)
                     st.success(f"Lote de {len(novas_linhas)} ingressos atrelado a {nome_add}!")
                     st.rerun()
