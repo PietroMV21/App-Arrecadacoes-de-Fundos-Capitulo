@@ -12,7 +12,6 @@ import requests
 import base64
 
 # --- 1. CONFIGURAÇÃO INICIAL E LOGO ---
-# Corrigido para .png conforme confirmado por você
 caminho_logo = "Brasão CDS PNG.png"
 tem_logo = os.path.exists(caminho_logo)
 
@@ -44,7 +43,6 @@ def selecionar_ingresso(id_ing):
 
 # --- 2. CONFIGURAÇÕES, PLANILHA NA NUVEM E IMAGENS ---
 
-# Coloque o link da sua planilha aqui dentro das aspas!
 LINK_PLANILHA = "https://docs.google.com/spreadsheets/d/1kpbNVDhO4OGd0rxcsCA71qWqYkZKmS7MwJEnTveCwPA/edit?usp=sharing"
 
 def conectar_google_sheets():
@@ -54,7 +52,6 @@ def conectar_google_sheets():
     gc = gspread.authorize(credentials)
     return gc.open_by_url(LINK_PLANILHA).sheet1
 
-# Conexão imediata com a planilha master na nuvem
 try:
     planilha_bd = conectar_google_sheets()
 except Exception as e:
@@ -65,7 +62,6 @@ def carregar_config():
     if os.path.exists(CONFIG_FILE):
         with open(CONFIG_FILE, "r") as f:
             config = json.load(f)
-            # Garante que as chaves de gerenciar membros existam no JSON
             if "vendedores_extras" not in config:
                 config["vendedores_extras"] = []
             if "vendedores_ocultos" not in config:
@@ -91,7 +87,6 @@ def ler_dados_nuvem():
     df.fillna("", inplace=True) 
     return df
 
-# Baixa os dados em tempo real da nuvem
 df_dados = ler_dados_nuvem()
 
 def salvar_dados_nuvem(df):
@@ -117,10 +112,8 @@ lista_base = ["Bernardo", "Caetano", "Gabriel", "Gabriel Medina", "Guilherme", "
 def strip_accents(s):
     return ''.join(c for c in unicodedata.normalize('NFD', s) if unicodedata.category(c) != 'Mn')
 
-# Une a lista base, os que já estão na planilha e os adicionados manualmente
 todos_iniciais = set(df_dados["Vendedor"].unique()) | set(lista_base) | set(config_app.get("vendedores_extras", []))
 
-# Impede a remoção de meninos que têm ingressos atrelados no momento
 ocultos = set(config_app.get("vendedores_ocultos", []))
 ativos_com_ingresso = set(df_dados["Vendedor"].unique())
 ocultos_validos = ocultos - ativos_com_ingresso 
@@ -133,7 +126,6 @@ def get_cor_status(status):
     if status == "Pago": return "🟢"
     return "⚪"
 
-# CORREÇÃO DO ERRO: Adicionado o índice da linha (idx) para garantir chaves únicas globais
 def exibir_blocos_ingressos(df_filtrado, prefixo_chave):
     n_cols = 10
     for i in range(0, len(df_filtrado), n_cols):
@@ -155,7 +147,6 @@ if tem_logo:
 st.sidebar.title("🍗 Galeto do Capítulo")
 menu = st.sidebar.radio("Navegação", ["🏠 Página Inicial", "👦 Área do Vendedor", "💼 Tesouraria", "⚙️ Configurações"])
 
-# --- AJUSTE DE FUSO HORÁRIO PARA O BRASIL ---
 from datetime import timezone, timedelta
 
 fuso_brasil = timezone(timedelta(hours=-3))
@@ -294,7 +285,6 @@ elif menu == "👦 Área do Vendedor":
 elif menu == "💼 Tesouraria":
     st.title("💼 Painel de Controle da Tesouraria")
     
-    # Implementação do Bloqueio por Senha na Entrada da Aba
     senha_acesso_painel = st.text_input("Digite a Senha da Tesouraria para liberar o acesso:", type="password", key="senha_acesso_painel_tes")
     
     if senha_acesso_painel == "2102":
@@ -317,7 +307,6 @@ elif menu == "💼 Tesouraria":
         aba_geral, aba_admin, aba_membros = st.tabs(["👁️ Visão Geral e Edição", "➕ Atribuir Ingressos", "👥 Gerenciar Meninos"])
         
         with aba_geral:
-            # BARRA DE PESQUISA ADICIONADA AQUI
             busca = st.text_input("🔍 Buscar por Nome do Menino ou Número do Ingresso:").strip()
             st.write("")
             
@@ -411,7 +400,7 @@ elif menu == "💼 Tesouraria":
                     st.success(f"Lote de {len(novas_linhas)} ingressos atrelado a {nome_add}!")
                     st.rerun()
                     
-        with col_add := aba_membros:
+        with aba_membros:
             st.subheader("👥 Gerenciar Lista de Meninos")
             st.write("Adicione novos membros para que apareçam nas opções ou retire nomes daqueles que não estão mais vendendo.")
             
@@ -492,7 +481,6 @@ elif menu == "⚙️ Configurações":
             df_zerado = pd.DataFrame(columns=["ID_Ingresso", "Vendedor", "Status", "Observacao", "Comprovante", "Retirado"])
             salvar_dados_nuvem(df_zerado)
             
-            # Limpa também a lista de membros extras e ocultos para a nova edição se desejar (opcional)
             config_app["vendedores_extras"] = []
             config_app["vendedores_ocultos"] = []
             salvar_config(config_app)
