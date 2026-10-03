@@ -320,6 +320,41 @@ elif menu == "💼 Tesouraria":
         aba_geral, aba_admin, aba_membros = st.tabs(["👁️ Visão Geral e Edição", "➕ Atribuir Ingressos", "👥 Gerenciar Meninos"])
         
         with aba_geral:
+            # --- EDIÇÃO EM LOTE ADICIONADA AQUI ---
+            st.subheader("⚡ Edição em Lote (Múltiplos Ingressos)")
+            with st.expander("Clique aqui para alterar o status de vários ingressos ao mesmo tempo"):
+                mapa_lote = {row['ID_Ingresso']: f"Nº {row['ID_Ingresso']} ({row['Vendedor']} - {row['Status']})" for _, row in df_dados.iterrows()}
+                opcoes_lote = sorted(list(mapa_lote.keys()))
+                
+                selecionados_lote = st.multiselect("Selecione os ingressos para alterar:", opcoes_lote, format_func=lambda x: mapa_lote[x])
+                
+                col_lote1, col_lote2 = st.columns(2)
+                with col_lote1:
+                    lote_status = st.selectbox("Novo Status:", ["(Manter Atual)", "Não Vendido", "Aguardando Pagamento", "Pago"])
+                    lote_obs = st.text_input("Nova Observação (Deixe em branco para manter a atual):")
+                with col_lote2:
+                    lote_retirado = st.radio("Galeto Retirado?", ["(Manter Atual)", "Não", "Sim"])
+                    
+                if st.button("💾 Salvar Alterações em Lote"):
+                    if selecionados_lote:
+                        for ing in selecionados_lote:
+                            idx = df_dados[df_dados["ID_Ingresso"] == ing].index[0]
+                            if lote_status != "(Manter Atual)":
+                                df_dados.at[idx, "Status"] = lote_status
+                            if lote_retirado != "(Manter Atual)":
+                                df_dados.at[idx, "Retirado"] = lote_retirado
+                            if lote_obs.strip() != "":
+                                df_dados.at[idx, "Observacao"] = lote_obs
+                                
+                        salvar_dados_nuvem(df_dados)
+                        st.success(f"{len(selecionados_lote)} ingressos atualizados com sucesso!")
+                        st.rerun()
+                    else:
+                        st.warning("Selecione pelo menos um ingresso na lista acima.")
+            
+            st.markdown("---")
+            # --- FIM DA EDIÇÃO EM LOTE ---
+
             busca = st.text_input("🔍 Buscar por Nome do Menino ou Número do Ingresso:").strip()
             st.write("")
             
